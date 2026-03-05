@@ -1,0 +1,8 @@
+version: "2"
+authtoken: YOUR_NGROK_AUTH_TOKEN
+tunnels:
+  ecommerce:
+    proto: http
+    addr: 5000
+    host_header: rewrite
+    inspect: false
