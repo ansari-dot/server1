@@ -34,9 +34,9 @@ const orderAddressSchema = new mongoose.Schema({
   address1: { type: String, required: true },
   address2: String,
   city: { type: String, required: true },
-  province: { type: String, required: true },
+  province: String,
   country: { type: String, required: true },
-  postalCode: { type: String, required: true },
+  postalCode: String,
   phone: String
 }, { _id: false });
 

@@ -1,6 +1,7 @@
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import FlashDeal from '../models/FlashDeal.js';
+import mongoose from 'mongoose';
 
 class OrderController {
   // Get all orders with pagination and filtering
@@ -124,6 +125,21 @@ class OrderController {
       const orderData = req.body;
       console.log('Received order data:', JSON.stringify(orderData, null, 2));
 
+      // Validate required fields
+      if (!orderData.customer || !orderData.customer.email || !orderData.customer.firstName) {
+        return res.status(400).json({
+          success: false,
+          message: 'Customer information is required'
+        });
+      }
+
+      if (!orderData.items || orderData.items.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Order must contain at least one item'
+        });
+      }
+
       // Add user ID if authenticated
       if (req.user?.userId) {
         orderData.user = req.user.userId;
@@ -149,6 +165,15 @@ class OrderController {
         console.log('Looking for product with ID:', item.product);
         console.log('Item details:', item);
         
+        // Validate product ID format
+        if (!mongoose.Types.ObjectId.isValid(item.product)) {
+          console.log(`Invalid product ID format: ${item.product}`);
+          return res.status(400).json({
+            success: false,
+            message: `Invalid product ID: ${item.product}`
+          });
+        }
+        
         const product = await Product.findById(item.product);
         console.log('Found product:', product);
         
@@ -156,7 +181,7 @@ class OrderController {
           console.log(`Product ${item.product} not found`);
           return res.status(400).json({
             success: false,
-            message: `Product ${item.product} not found`
+            message: `Product not found`
           });
         }
 
@@ -199,17 +224,11 @@ class OrderController {
 
         // Update product inventory
         if (product.trackInventory) {
-          product.inventory.quantity -= item.quantity;
-          // Only save if brand is not empty to avoid validation error
-          if (product.brand && product.brand.trim()) {
-            await product.save();
-          } else {
-            // If brand is empty, only update inventory without saving full product
-            await Product.updateOne(
-              { _id: item.product },
-              { $inc: { 'inventory.quantity': -item.quantity } }
-            );
-          }
+          await Product.updateOne(
+            { _id: item.product },
+            { $inc: { 'inventory.quantity': -item.quantity } }
+          );
+          console.log('Product inventory updated for:', product.name);
         }
       }
 
@@ -231,9 +250,26 @@ class OrderController {
 
     } catch (error) {
       console.error('Create order error:', error);
+      console.error('Error stack:', error.stack);
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        errors: error.errors
+      });
+      
+      // Send more detailed error for validation errors
+      if (error.name === 'ValidationError') {
+        const messages = Object.values(error.errors).map(err => err.message);
+        return res.status(400).json({
+          success: false,
+          message: 'Validation error: ' + messages.join(', '),
+          errors: error.errors
+        });
+      }
+      
       res.status(500).json({
         success: false,
-        message: 'Internal server error'
+        message: 'Internal server error: ' + error.message
       });
     }
   }
