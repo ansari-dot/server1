@@ -57,7 +57,8 @@ class FlashDealController {
           settings: deal.settings,
           inventory: deal.inventory,
           performance: deal.performance,
-          product: product
+          product: product,
+          schedule: deal.schedule
         };
       });
 
@@ -125,7 +126,8 @@ class FlashDealController {
         settings: flashDeal.settings,
         inventory: flashDeal.inventory,
         performance: flashDeal.performance,
-        product: product
+        product: product,
+        schedule: flashDeal.schedule
       };
 
       res.json({
@@ -240,7 +242,8 @@ class FlashDealController {
         settings: flashDeal.settings,
         inventory: flashDeal.inventory,
         performance: flashDeal.performance,
-        product: product
+        product: product,
+        schedule: flashDeal.schedule
       };
 
       res.json({
@@ -344,7 +347,8 @@ class FlashDealController {
             settings: deal.settings || {},
             inventory: deal.inventory || {},
             performance: deal.performance || {},
-            product: product || { _id: deal.product }
+            product: product || { _id: deal.product },
+            schedule: deal.schedule
           };
           
           formattedDeals.push(formattedDeal);
@@ -379,36 +383,49 @@ class FlashDealController {
   // Get available products for flash deals
   static async getAvailableProducts(req, res) {
     try {
-      const { search, category, page = 1, limit = 20 } = req.query;
+      const { search, category, page = 1, limit = 100, includeAll } = req.query;
+      
+      console.log('=== GET AVAILABLE PRODUCTS ===');
       
       // Build query
-      const query = { status: 'active' };
+      const query = {};
       
       if (search) {
         query.$or = [
           { name: { $regex: search, $options: 'i' } },
+          { slug: { $regex: search, $options: 'i' } },
           { description: { $regex: search, $options: 'i' } },
           { sku: { $regex: search, $options: 'i' } }
         ];
       }
       
-      if (category) {
+      if (category && !search) {
         query.$or = [
           { mainCategory: { $regex: category, $options: 'i' } },
           { subCategory: { $regex: category, $options: 'i' } }
         ];
       }
 
-      // Exclude products that already have flash deals
-      const existingFlashDeals = await FlashDeal.find({}, 'product');
-      const productIds = existingFlashDeals.map(deal => deal.product);
-      query._id = { $nin: productIds };
+      // Only exclude products with flash deals if includeAll is not set
+      if (!includeAll) {
+        const existingFlashDeals = await FlashDeal.find({}, 'product');
+        const productIds = existingFlashDeals.map(deal => deal.product.toString());
+        console.log('Products with flash deals:', productIds);
+        
+        if (productIds.length > 0) {
+          query._id = { $nin: productIds };
+        }
+      }
+
+      console.log('Query:', JSON.stringify(query, null, 2));
 
       const products = await Product.find(query)
         .sort({ createdAt: -1 })
         .limit(limit * 1)
         .skip((page - 1) * limit)
-        .select('name sku price mainCategory subCategory images');
+        .select('name slug sku price mainCategory subCategory brand images status');
+
+      console.log('Found available products:', products.length);
 
       const total = await Product.countDocuments(query);
 
@@ -429,7 +446,8 @@ class FlashDealController {
       console.error('Get available products error:', error);
       res.status(500).json({
         success: false,
-        message: 'Internal server error'
+        message: 'Internal server error',
+        error: error.message
       });
     }
   }
