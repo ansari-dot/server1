@@ -151,6 +151,14 @@ flashDealSchema.methods.getTimeLeft = function() {
   return { days, hours, minutes, seconds };
 };
 
+// Calculate deal price
+flashDealSchema.methods.calculateDealPrice = function(originalPrice) {
+  const discountAmount = this.discount.type === 'percentage' 
+    ? (originalPrice * this.discount.value) / 100 
+    : this.discount.value;
+  return originalPrice - discountAmount;
+};
+
 // Purchase from flash deal
 flashDealSchema.methods.purchase = async function(quantity = 1) {
   if (!this.isActive()) {

@@ -328,7 +328,7 @@ class FlashDealController {
           const finalPrice = originalPrice - discountAmount;
           const discountPercentage = originalPrice > 0 ? Math.round((discountAmount / originalPrice) * 100) : 0;
           const soldPercent = deal.inventory?.originalStock > 0 
-            ? Math.round((deal.inventory.sold / deal.inventory.originalStock) * 100)
+            ? Math.round(((deal.inventory.originalStock - deal.inventory.currentStock) / deal.inventory.originalStock) * 100)
             : 0;
 
           const formattedDeal = {

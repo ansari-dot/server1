@@ -195,11 +195,13 @@ class OrderController {
         // Check if product is part of an active flash deal
         const flashDeal = await FlashDeal.findOne({
           product: item.product,
-          status: 'active'
+          status: { $in: ['active', 'scheduled'] },
+          'schedule.endDate': { $gte: new Date() }
         });
 
         if (flashDeal) {
           console.log('Flash deal found for product:', product.name);
+          console.log('Current flash deal stock before:', flashDeal.inventory.currentStock);
           
           // Check flash deal stock
           if (flashDeal.inventory.currentStock < item.quantity) {
@@ -213,13 +215,16 @@ class OrderController {
           flashDeal.inventory.currentStock -= item.quantity;
           flashDeal.inventory.sold += item.quantity;
           
+          console.log('Flash deal stock after:', flashDeal.inventory.currentStock);
+          console.log('Flash deal sold:', flashDeal.inventory.sold);
+          
           // Update status if out of stock
           if (flashDeal.inventory.currentStock === 0) {
             flashDeal.status = 'out_of_stock';
           }
           
           await flashDeal.save();
-          console.log('Flash deal inventory updated:', flashDeal.inventory);
+          console.log('Flash deal saved successfully');
         }
 
         // Update product inventory

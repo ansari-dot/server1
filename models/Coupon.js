@@ -146,20 +146,24 @@ couponSchema.methods.canCustomerUse = async function(customerEmail) {
 
 // Apply coupon to cart
 couponSchema.methods.applyToCart = function(cart) {
-  if (!this.isValid()) return { valid: false, message: 'Coupon is not valid' };
+  if (!this.isValid()) return { valid: false, message: 'Invalid coupon' };
+  
+  let applicableSubtotal = cart.subtotal;
   
   // Check if coupon is product-specific
   if (this.scope.type === 'products' && this.scope.products.length > 0) {
-    const cartProductIds = cart.items.map(item => item.id.toString());
     const couponProductIds = this.scope.products.map(p => p._id ? p._id.toString() : p.toString());
     
-    // Check if any cart item matches coupon products
-    const hasMatchingProduct = cartProductIds.some(id => couponProductIds.includes(id));
+    // Calculate subtotal only for matching products
+    applicableSubtotal = cart.items
+      .filter(item => couponProductIds.includes(item.product.toString()))
+      .reduce((sum, item) => sum + item.total, 0);
     
-    if (!hasMatchingProduct) {
+    // Check if any cart item matches coupon products
+    if (applicableSubtotal === 0) {
       return { 
         valid: false, 
-        message: 'This coupon is not applicable to the products in your cart' 
+        message: 'Invalid coupon' 
       };
     }
   }
@@ -167,16 +171,16 @@ couponSchema.methods.applyToCart = function(cart) {
   let discountAmount = 0;
   
   // Check minimum amount
-  if (this.minimumAmount && cart.subtotal < this.minimumAmount) {
+  if (this.minimumAmount && applicableSubtotal < this.minimumAmount) {
     return { 
       valid: false, 
       message: `Minimum order amount is $${this.minimumAmount}` 
     };
   }
   
-  // Calculate discount based on type
+  // Calculate discount based on type (only on applicable products)
   if (this.type === 'percentage') {
-    discountAmount = (cart.subtotal * this.value) / 100;
+    discountAmount = (applicableSubtotal * this.value) / 100;
   } else {
     discountAmount = this.value;
   }
@@ -191,7 +195,9 @@ couponSchema.methods.applyToCart = function(cart) {
     discountAmount,
     type: this.type,
     value: this.value,
-    code: this.code
+    code: this.code,
+    applicableSubtotal,
+    isProductSpecific: this.scope.type === 'products' && this.scope.products.length > 0
   };
 };
 
