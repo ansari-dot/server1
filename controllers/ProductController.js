@@ -43,7 +43,8 @@ class ProductController {
       }
       if (brand) query.brand = { $regex: brand, $options: 'i' };
       if (color) query['colors.name'] = { $regex: color, $options: 'i' };
-      if (status) query.status = status;
+      // Default to active products only, unless status is explicitly provided
+      query.status = status || 'active';
       if (minPrice || maxPrice) {
         query.price = {};
         if (minPrice) query.price.$gte = parseFloat(minPrice);

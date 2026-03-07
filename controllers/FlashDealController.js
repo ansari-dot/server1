@@ -54,6 +54,7 @@ class FlashDealController {
           soldPercent: soldPercent,
           targetDate: deal.schedule.endDate,
           status: currentStatus,
+          isActive: deal.isActive !== false,
           timeLeft: timeLeft,
           settings: deal.settings,
           inventory: deal.inventory,
@@ -124,6 +125,7 @@ class FlashDealController {
         soldPercent: soldPercent,
         targetDate: flashDeal.schedule.endDate,
         status: flashDeal.updateStatus(),
+        isActive: flashDeal.isActive !== false,
         timeLeft: flashDeal.getTimeLeft(),
         settings: flashDeal.settings,
         inventory: flashDeal.inventory,
@@ -294,12 +296,12 @@ class FlashDealController {
     try {
       console.log('=== GET ACTIVE FLASH DEALS ===');
       
-      // Get ALL flash deals for debugging (we'll filter in frontend)
-      const flashDeals = await FlashDeal.find({})
+      // Get only active flash deals (isActive = true)
+      const flashDeals = await FlashDeal.find({ isActive: true })
         .populate('product', 'name sku price images mainCategory')
         .sort({ 'schedule.endDate': 1 });
 
-      console.log('Found total flash deals:', flashDeals.length);
+      console.log('Found active flash deals:', flashDeals.length);
       
       // Format for frontend with error handling
       const formattedDeals = [];
@@ -450,6 +452,36 @@ class FlashDealController {
         success: false,
         message: 'Internal server error',
         error: error.message
+      });
+    }
+  }
+
+  // Toggle flash deal active status
+  static async toggleActive(req, res) {
+    try {
+      const flashDeal = await FlashDeal.findById(req.params.id);
+      
+      if (!flashDeal) {
+        return res.status(404).json({
+          success: false,
+          message: 'Flash deal not found'
+        });
+      }
+
+      flashDeal.isActive = !flashDeal.isActive;
+      await flashDeal.save();
+
+      res.json({
+        success: true,
+        message: `Flash deal ${flashDeal.isActive ? 'activated' : 'deactivated'} successfully`,
+        data: { isActive: flashDeal.isActive }
+      });
+
+    } catch (error) {
+      console.error('Toggle flash deal error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error'
       });
     }
   }

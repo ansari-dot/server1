@@ -21,6 +21,9 @@ router.post('/', FlashDealController.createFlashDeal);
 // Update flash deal
 router.put('/:id', FlashDealController.updateFlashDeal);
 
+// Toggle flash deal active status
+router.patch('/:id/toggle', FlashDealController.toggleActive);
+
 // Delete flash deal
 router.delete('/:id', FlashDealController.deleteFlashDeal);
 

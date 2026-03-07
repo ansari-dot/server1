@@ -59,6 +59,10 @@ const flashDealSchema = new mongoose.Schema({
     enum: ['scheduled', 'active', 'expired', 'out_of_stock', 'cancelled'],
     default: 'scheduled'
   },
+  isActive: {
+    type: Boolean,
+    default: true
+  },
   settings: {
     showBadge: {
       type: Boolean,
@@ -131,7 +135,8 @@ flashDealSchema.methods.updateStatus = function() {
 };
 
 // Check if deal is currently active
-flashDealSchema.methods.isActive = function() {
+flashDealSchema.methods.checkIfActive = function() {
+  if (!this.isActive) return false; // Check manual activation
   return this.updateStatus() === 'active';
 };
 
@@ -161,7 +166,7 @@ flashDealSchema.methods.calculateDealPrice = function(originalPrice) {
 
 // Purchase from flash deal
 flashDealSchema.methods.purchase = async function(quantity = 1) {
-  if (!this.isActive()) {
+  if (!this.checkIfActive()) {
     throw new Error('Flash deal is not active');
   }
   
