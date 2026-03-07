@@ -24,36 +24,37 @@ class FlashDealController {
 
       // Calculate additional fields for frontend
       const flashDealsWithStats = flashDeals.map(deal => {
-        const dealObj = deal.toObject();
-        
-        // Calculate discount percentage
         const product = deal.product;
-        const originalPrice = product.price;
+        const originalPrice = product?.price || 0;
         const discountAmount = deal.discount.type === 'percentage' 
           ? (originalPrice * deal.discount.value) / 100 
           : deal.discount.value;
         const finalPrice = originalPrice - discountAmount;
-        const discountPercentage = Math.round((discountAmount / originalPrice) * 100);
+        const discountPercentage = originalPrice > 0 ? Math.round((discountAmount / originalPrice) * 100) : 0;
         
         // Calculate sold percentage
         const soldPercent = deal.inventory.originalStock > 0 
           ? Math.round((deal.inventory.sold / deal.inventory.originalStock) * 100)
           : 0;
         
+        // Update and get status
+        const currentStatus = deal.updateStatus();
+        const timeLeft = deal.getTimeLeft();
+        
         // Format for frontend
         return {
-          id: dealObj._id,
-          category: product.mainCategory || 'General',
+          id: deal._id,
+          category: product?.mainCategory || 'General',
           title: deal.name,
-          img: product.images?.[0]?.url || '/placeholder.jpg',
+          img: product?.images?.[0]?.url || '/placeholder.jpg',
           price: finalPrice,
           oldPrice: originalPrice,
           discount: discountPercentage,
           available: deal.inventory.currentStock,
           soldPercent: soldPercent,
           targetDate: deal.schedule.endDate,
-          status: deal.updateStatus(),
-          timeLeft: deal.getTimeLeft(),
+          status: currentStatus,
+          timeLeft: timeLeft,
           settings: deal.settings,
           inventory: deal.inventory,
           performance: deal.performance,
@@ -79,7 +80,8 @@ class FlashDealController {
       console.error('Get flash deals error:', error);
       res.status(500).json({
         success: false,
-        message: 'Internal server error'
+        message: 'Internal server error',
+        error: error.message
       });
     }
   }
