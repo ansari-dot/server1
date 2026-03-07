@@ -229,14 +229,15 @@ class DashboardController {
       }
     ]);
 
-    // Get expiring coupons
+    // Get expiring coupons (expiring within next 7 days)
+    const now = new Date();
     const nextWeek = new Date();
     nextWeek.setDate(nextWeek.getDate() + 7);
 
     const expiringCoupons = await Coupon.find({
       'validity.isActive': true,
-      'validity.endDate': { $lte: nextWeek, $gte: new Date() }
-    }).sort({ 'validity.endDate': 1 }).limit(5);
+      'validity.endDate': { $gte: now, $lte: nextWeek }
+    }).sort({ 'validity.endDate': 1 }).limit(10);
 
     const result = stats[0] || {
       totalCoupons: 0,
@@ -290,7 +291,7 @@ class DashboardController {
           expiredFlashDeals: {
             $sum: {
               $cond: [
-                { $gt: ['$schedule.endDate', now] },
+                { $lt: ['$schedule.endDate', now] },
                 1,
                 0
               ]

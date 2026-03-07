@@ -24,6 +24,10 @@ const adminSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  profileImage: {
+    type: String,
+    default: null
+  },
   role: {
     type: String,
     enum: ['super_admin', 'admin', 'manager'],
@@ -81,6 +85,7 @@ adminSchema.methods.toPublicJSON = function() {
     email: this.email,
     firstName: this.firstName,
     lastName: this.lastName,
+    profileImage: this.profileImage,
     role: this.role,
     permissions: this.permissions,
     lastLogin: this.lastLogin,

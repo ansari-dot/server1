@@ -51,6 +51,12 @@ router.get('/colors', ProductController.getColors);
 // Get all categories
 router.get('/categories', ProductController.getCategories);
 
+// Export products to CSV
+router.get('/export', ProductController.exportProducts);
+
+// Check low stock and create notifications
+router.post('/check-low-stock', ProductController.checkLowStock);
+
 // Get top rated products
 router.get('/top-rated',
   ProductController.getTopRatedProducts

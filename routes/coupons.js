@@ -9,6 +9,9 @@ router.get('/', CouponController.getCoupons);
 // Get coupon statistics
 router.get('/stats', CouponController.getCouponStats);
 
+// Export coupons to CSV
+router.get('/export', CouponController.exportCoupons);
+
 // Validate coupon (public endpoint, but requires auth for admin)
 router.post('/validate', CouponController.validateCoupon);
 

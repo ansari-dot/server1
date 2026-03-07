@@ -1,5 +1,11 @@
 import Admin from '../models/Admin.js';
 import jwt from 'jsonwebtoken';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 class AdminAuthController {
   static async login(req, res) {
@@ -81,6 +87,108 @@ class AdminAuthController {
       res.status(500).json({
         success: false,
         message: 'Failed to get profile'
+      });
+    }
+  }
+
+  static async updateProfile(req, res) {
+    try {
+      const { firstName, lastName, email } = req.body;
+      const admin = await Admin.findById(req.admin._id);
+
+      if (!admin) {
+        return res.status(404).json({
+          success: false,
+          message: 'Admin not found'
+        });
+      }
+
+      if (email && email !== admin.email) {
+        const existingAdmin = await Admin.findOne({ email });
+        if (existingAdmin) {
+          return res.status(400).json({
+            success: false,
+            message: 'Email already in use'
+          });
+        }
+        admin.email = email;
+      }
+
+      if (firstName) admin.firstName = firstName;
+      if (lastName) admin.lastName = lastName;
+
+      if (req.file) {
+        if (admin.profileImage) {
+          const oldImagePath = path.join(__dirname, '..', admin.profileImage);
+          if (fs.existsSync(oldImagePath)) {
+            fs.unlinkSync(oldImagePath);
+          }
+        }
+        admin.profileImage = `/uploads/profiles/${req.file.filename}`;
+      }
+
+      await admin.save();
+
+      res.json({
+        success: true,
+        message: 'Profile updated successfully',
+        data: { admin: admin.toPublicJSON() }
+      });
+    } catch (error) {
+      console.error('Update profile error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update profile'
+      });
+    }
+  }
+
+  static async changePassword(req, res) {
+    try {
+      const { currentPassword, newPassword } = req.body;
+
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'Current password and new password are required'
+        });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: 'New password must be at least 6 characters long'
+        });
+      }
+
+      const admin = await Admin.findById(req.admin._id);
+      if (!admin) {
+        return res.status(404).json({
+          success: false,
+          message: 'Admin not found'
+        });
+      }
+
+      const isMatch = await admin.comparePassword(currentPassword);
+      if (!isMatch) {
+        return res.status(401).json({
+          success: false,
+          message: 'Current password is incorrect'
+        });
+      }
+
+      admin.password = newPassword;
+      await admin.save();
+
+      res.json({
+        success: true,
+        message: 'Password changed successfully'
+      });
+    } catch (error) {
+      console.error('Change password error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to change password'
       });
     }
   }

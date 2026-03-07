@@ -10,6 +10,9 @@ router.get('/', OrderController.getOrders);
 // Get order statistics
 router.get('/stats', OrderController.getOrderStats);
 
+// Export orders to CSV
+router.get('/export', OrderController.exportOrders);
+
 // Get recent orders
 router.get('/recent', OrderController.getRecentOrders);
 
@@ -61,6 +64,11 @@ router.patch('/:id/payment',
 // Add tracking information
 router.patch('/:id/tracking',
   OrderController.addTracking
+);
+
+// Generate refund verification code
+router.post('/:id/refund/generate-code',
+  OrderController.generateRefundCode
 );
 
 // Refund order

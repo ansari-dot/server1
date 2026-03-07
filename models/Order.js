@@ -112,6 +112,10 @@ const orderSchema = new mongoose.Schema({
     source: { type: String, default: 'admin' },
     userAgent: String,
     ip: String
+  },
+  refundVerificationCode: {
+    code: String,
+    expiresAt: Date
   }
 }, {
   timestamps: true

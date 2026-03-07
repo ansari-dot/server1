@@ -451,6 +451,46 @@ class CouponController {
       });
     }
   }
+
+  // Export coupons to CSV
+  static async exportCoupons(req, res) {
+    try {
+      const coupons = await Coupon.find().sort({ createdAt: -1 });
+
+      const csv = [
+        ['Code', 'Name', 'Type', 'Value', 'Status', 'Usage', 'Limit', 'Start Date', 'End Date'].join(',')
+      ];
+
+      coupons.forEach(coupon => {
+        const value = coupon.type === 'percentage' ? `${coupon.value}%` : `$${coupon.value}`;
+        const status = coupon.validity.isActive ? 'Active' : 'Inactive';
+        const usage = `${coupon.usage.count}/${coupon.usage.limit || 'Unlimited'}`;
+        
+        csv.push([
+          `"${coupon.code}"`,
+          `"${coupon.name}"`,
+          `"${coupon.type}"`,
+          `"${value}"`,
+          `"${status}"`,
+          `"${usage}"`,
+          `"${coupon.usage.limitPerCustomer || 'Unlimited'}"`,
+          `"${new Date(coupon.validity.startDate).toLocaleDateString()}"`,
+          `"${new Date(coupon.validity.endDate).toLocaleDateString()}"`
+        ].join(','));
+      });
+
+      const filename = `coupons-export-${new Date().toISOString().split('T')[0]}.csv`;
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(csv.join('\n'));
+    } catch (error) {
+      console.error('Export coupons error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to export coupons'
+      });
+    }
+  }
 }
 
 export default CouponController;

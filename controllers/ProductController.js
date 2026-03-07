@@ -1,4 +1,5 @@
 import Product from '../models/Product.js';
+import NotificationController from './NotificationController.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -258,10 +259,34 @@ class ProductController {
       if (!product) {
         return res.status(404).json({ success: false, message: 'Product not found' });
       }
+      
       if (quantity !== undefined) product.inventory.quantity = quantity;
       if (lowStockThreshold !== undefined) product.inventory.lowStockThreshold = lowStockThreshold;
       if (allowBackorder !== undefined) product.inventory.allowBackorder = allowBackorder;
+      
       await product.save();
+      
+      // Check if stock is low and create notification if not already exists
+      const threshold = product.inventory.lowStockThreshold || 10;
+      if (product.inventory.quantity <= threshold) {
+        const Notification = (await import('../models/Notification.js')).default;
+        const existingNotification = await Notification.findOne({
+          productId: product._id,
+          type: 'product',
+          isRead: false
+        });
+        
+        if (!existingNotification) {
+          await NotificationController.createNotification(
+            'product',
+            'Low Stock Alert',
+            `Product "${product.name}" is running low on stock. Current: ${product.inventory.quantity}, Threshold: ${threshold}`,
+            null,
+            product._id
+          );
+        }
+      }
+      
       res.json({ success: true, message: 'Inventory updated successfully', data: { inventory: product.inventory } });
     } catch (error) {
       console.error('Update inventory error:', error);
@@ -366,6 +391,88 @@ class ProductController {
     } catch (error) {
       console.error('Get categories error:', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  }
+
+  static async exportProducts(req, res) {
+    try {
+      const products = await Product.find().sort({ createdAt: -1 });
+
+      const csv = [
+        ['SKU', 'Name', 'Brand', 'Category', 'Price', 'Stock', 'Status', 'Created Date'].join(',')
+      ];
+
+      products.forEach(product => {
+        csv.push([
+          `"${product.sku || 'N/A'}"`,
+          `"${product.name}"`,
+          `"${product.brand || 'N/A'}"`,
+          `"${product.mainCategory || 'N/A'}"`,
+          `"$${product.price.toFixed(2)}"`,
+          `"${product.inventory?.quantity || 0}"`,
+          `"${product.status}"`,
+          `"${new Date(product.createdAt).toLocaleDateString()}"`
+        ].join(','));
+      });
+
+      const filename = `products-export-${new Date().toISOString().split('T')[0]}.csv`;
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(csv.join('\n'));
+    } catch (error) {
+      console.error('Export products error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to export products'
+      });
+    }
+  }
+
+  static async checkLowStock(req, res) {
+    try {
+      const Notification = (await import('../models/Notification.js')).default;
+      
+      const products = await Product.find({
+        trackInventory: true,
+        status: 'active'
+      });
+
+      let notificationsCreated = 0;
+
+      for (const product of products) {
+        const threshold = product.inventory.lowStockThreshold || 10;
+        const currentStock = product.inventory.quantity;
+
+        if (currentStock <= threshold) {
+          const existingNotification = await Notification.findOne({
+            productId: product._id,
+            type: 'product',
+            isRead: false
+          });
+
+          if (!existingNotification) {
+            await Notification.create({
+              type: 'product',
+              title: 'Low Stock Alert',
+              message: `Product "${product.name}" is running low on stock. Current: ${currentStock}, Threshold: ${threshold}`,
+              productId: product._id
+            });
+            notificationsCreated++;
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Created ${notificationsCreated} low stock notifications`,
+        data: { notificationsCreated }
+      });
+    } catch (error) {
+      console.error('Check low stock error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to check low stock'
+      });
     }
   }
 }

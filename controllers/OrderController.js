@@ -1,6 +1,7 @@
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import FlashDeal from '../models/FlashDeal.js';
+import NotificationController from './NotificationController.js';
 import mongoose from 'mongoose';
 
 class OrderController {
@@ -266,6 +267,28 @@ class OrderController {
               }
             );
             
+            // Check for low stock after update
+            const updatedProduct = await Product.findById(item.product);
+            const threshold = updatedProduct.inventory.lowStockThreshold || 10;
+            if (updatedProduct.inventory.quantity <= threshold) {
+              const Notification = (await import('../models/Notification.js')).default;
+              const existingNotification = await Notification.findOne({
+                productId: updatedProduct._id,
+                type: 'product',
+                isRead: false
+              });
+              
+              if (!existingNotification) {
+                await NotificationController.createNotification(
+                  'product',
+                  'Low Stock Alert',
+                  `Product "${updatedProduct.name}" is running low on stock. Current: ${updatedProduct.inventory.quantity}, Threshold: ${threshold}`,
+                  null,
+                  updatedProduct._id
+                );
+              }
+            }
+            
             console.log(`After update: decreased color inventory by ${item.quantity}`);
             console.log('Color inventory updated for:', product.name, '-', selectedColorName);
           } else {
@@ -275,6 +298,29 @@ class OrderController {
                 { _id: item.product },
                 { $inc: { 'inventory.quantity': -item.quantity } }
               );
+              
+              // Check for low stock
+              const updatedProduct = await Product.findById(item.product);
+              const threshold = updatedProduct.inventory.lowStockThreshold || 10;
+              if (updatedProduct.inventory.quantity <= threshold) {
+                const Notification = (await import('../models/Notification.js')).default;
+                const existingNotification = await Notification.findOne({
+                  productId: updatedProduct._id,
+                  type: 'product',
+                  isRead: false
+                });
+                
+                if (!existingNotification) {
+                  await NotificationController.createNotification(
+                    'product',
+                    'Low Stock Alert',
+                    `Product "${updatedProduct.name}" is running low on stock. Current: ${updatedProduct.inventory.quantity}, Threshold: ${threshold}`,
+                    null,
+                    updatedProduct._id
+                  );
+                }
+              }
+              
               console.log('Product inventory updated for:', product.name);
             }
           }
@@ -283,6 +329,29 @@ class OrderController {
             { _id: item.product },
             { $inc: { 'inventory.quantity': -item.quantity } }
           );
+          
+          // Check for low stock
+          const updatedProduct = await Product.findById(item.product);
+          const threshold = updatedProduct.inventory.lowStockThreshold || 10;
+          if (updatedProduct.inventory.quantity <= threshold) {
+            const Notification = (await import('../models/Notification.js')).default;
+            const existingNotification = await Notification.findOne({
+              productId: updatedProduct._id,
+              type: 'product',
+              isRead: false
+            });
+            
+            if (!existingNotification) {
+              await NotificationController.createNotification(
+                'product',
+                'Low Stock Alert',
+                `Product "${updatedProduct.name}" is running low on stock. Current: ${updatedProduct.inventory.quantity}, Threshold: ${threshold}`,
+                null,
+                updatedProduct._id
+              );
+            }
+          }
+          
           console.log('Product inventory updated for:', product.name);
         }
       }
@@ -296,6 +365,14 @@ class OrderController {
       // Populate products for response
       await order.populate('items.product', 'name sku images');
       console.log('Order populated successfully');
+
+      // Create notification for new order
+      await NotificationController.createNotification(
+        'order',
+        'New Order Received',
+        `Order ${order.orderNumber} from ${orderData.customer.firstName} ${orderData.customer.lastName} - $${order.total.toFixed(2)}`,
+        order._id
+      );
 
       res.status(201).json({
         success: true,
@@ -466,8 +543,8 @@ class OrderController {
 
       order.status = status;
       
-      // Update payment status to 'paid' when order is confirmed
-      if (status === 'confirmed' && order.paymentStatus === 'pending') {
+      // Update payment status to 'paid' when order is confirmed, shipped, or delivered
+      if (['confirmed', 'shipped', 'delivered'].includes(status) && order.paymentStatus === 'pending') {
         order.paymentStatus = 'paid';
       }
       
@@ -622,6 +699,50 @@ class OrderController {
     }
   }
 
+  // Export orders to CSV
+  static async exportOrders(req, res) {
+    try {
+      const orders = await Order.find()
+        .populate('items.product', 'name sku')
+        .populate('user', 'firstName lastName email')
+        .sort({ createdAt: -1 });
+
+      const csv = [
+        ['Order Number', 'Customer Name', 'Email', 'Date', 'Status', 'Payment Status', 'Total', 'Items'].join(',')
+      ];
+
+      orders.forEach(order => {
+        const customerName = order.user 
+          ? `${order.user.firstName} ${order.user.lastName}`
+          : `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim();
+        const email = order.user?.email || order.customer?.email || 'N/A';
+        const items = order.items.map(item => `${item.product?.name || 'Product'} (x${item.quantity})`).join('; ');
+        
+        csv.push([
+          `"${order.orderNumber}"`,
+          `"${customerName}"`,
+          `"${email}"`,
+          `"${new Date(order.createdAt).toLocaleDateString()}"`,
+          `"${order.status}"`,
+          `"${order.paymentStatus}"`,
+          `"$${order.total.toFixed(2)}"`,
+          `"${items}"`
+        ].join(','));
+      });
+
+      const filename = `orders-export-${new Date().toISOString().split('T')[0]}.csv`;
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(csv.join('\n'));
+    } catch (error) {
+      console.error('Export orders error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to export orders'
+      });
+    }
+  }
+
   // Get recent orders
   static async getRecentOrders(req, res) {
     try {
@@ -739,13 +860,30 @@ class OrderController {
   // Refund order
   static async refundOrder(req, res) {
     try {
-      const { refundType, returnToStock } = req.body;
+      const { refundType, returnToStock, verificationCode } = req.body;
       const order = await Order.findById(req.params.id);
       
       if (!order) {
         return res.status(404).json({
           success: false,
           message: 'Order not found'
+        });
+      }
+
+      // Verify the code against .env
+      const correctCode = process.env.REFUND_VERIFICATION_CODE;
+      
+      if (!verificationCode) {
+        return res.status(400).json({
+          success: false,
+          message: 'Verification code is required'
+        });
+      }
+
+      if (verificationCode !== correctCode) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid verification code'
         });
       }
 
@@ -819,6 +957,33 @@ class OrderController {
 
     } catch (error) {
       console.error('Refund order error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error'
+      });
+    }
+  }
+
+  // Generate refund verification code
+  static async generateRefundCode(req, res) {
+    try {
+      const order = await Order.findById(req.params.id);
+      
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: 'Order not found'
+        });
+      }
+
+      // Just confirm the order exists, don't send the code
+      res.json({
+        success: true,
+        message: 'Ready for verification'
+      });
+
+    } catch (error) {
+      console.error('Generate refund code error:', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error'
