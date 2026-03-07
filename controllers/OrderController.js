@@ -60,6 +60,7 @@ class OrderController {
       // Execute query with pagination
       const orders = await Order.find(query)
         .populate('items.product', 'name sku images')
+        .populate('user', 'firstName lastName email')
         .sort(sort)
         .limit(limit * 1)
         .skip((page - 1) * limit)
@@ -164,6 +165,7 @@ class OrderController {
       for (const item of orderData.items) {
         console.log('Looking for product with ID:', item.product);
         console.log('Item details:', item);
+        console.log('Item variant:', item.variant);
         
         // Validate product ID format
         if (!mongoose.Types.ObjectId.isValid(item.product)) {
@@ -175,7 +177,8 @@ class OrderController {
         }
         
         const product = await Product.findById(item.product);
-        console.log('Found product:', product);
+        console.log('Found product:', product?.name);
+        console.log('Product colors:', product?.colors);
         
         if (!product) {
           console.log(`Product ${item.product} not found`);
@@ -185,7 +188,26 @@ class OrderController {
           });
         }
 
-        if (product.trackInventory && product.inventory.quantity < item.quantity) {
+        // Check if item has a selected color
+        const selectedColorName = item.variant?.name === 'Color' ? item.variant.value : null;
+        console.log('Selected color name:', selectedColorName);
+        
+        if (selectedColorName && product.colors && product.colors.length > 0) {
+          const colorIndex = product.colors.findIndex(c => c.name === selectedColorName);
+          console.log('Color index:', colorIndex);
+          
+          if (colorIndex !== -1) {
+            const color = product.colors[colorIndex];
+            console.log('Found color:', color.name, 'with inventory:', color.inventory);
+            
+            if (color.inventory < item.quantity) {
+              return res.status(400).json({
+                success: false,
+                message: `Insufficient stock for ${product.name} in ${selectedColorName} color`
+              });
+            }
+          }
+        } else if (product.trackInventory && product.inventory.quantity < item.quantity) {
           return res.status(400).json({
             success: false,
             message: `Insufficient stock for product ${product.name}`
@@ -228,7 +250,35 @@ class OrderController {
         }
 
         // Update product inventory
-        if (product.trackInventory) {
+        if (selectedColorName && product.colors && product.colors.length > 0) {
+          const colorIndex = product.colors.findIndex(c => c.name === selectedColorName);
+          if (colorIndex !== -1) {
+            console.log(`Updating color inventory for ${selectedColorName} at index ${colorIndex}`);
+            console.log(`Before: color inventory = ${product.colors[colorIndex].inventory}, total = ${product.inventory.quantity}`);
+            
+            await Product.updateOne(
+              { _id: item.product },
+              { 
+                $inc: { 
+                  [`colors.${colorIndex}.inventory`]: -item.quantity,
+                  'inventory.quantity': -item.quantity
+                }
+              }
+            );
+            
+            console.log(`After update: decreased color inventory by ${item.quantity}`);
+            console.log('Color inventory updated for:', product.name, '-', selectedColorName);
+          } else {
+            // Color not found, just update total inventory
+            if (product.trackInventory) {
+              await Product.updateOne(
+                { _id: item.product },
+                { $inc: { 'inventory.quantity': -item.quantity } }
+              );
+              console.log('Product inventory updated for:', product.name);
+            }
+          }
+        } else if (product.trackInventory) {
           await Product.updateOne(
             { _id: item.product },
             { $inc: { 'inventory.quantity': -item.quantity } }
@@ -415,6 +465,12 @@ class OrderController {
       }
 
       order.status = status;
+      
+      // Update payment status to 'paid' when order is confirmed
+      if (status === 'confirmed' && order.paymentStatus === 'pending') {
+        order.paymentStatus = 'paid';
+      }
+      
       await order.save();
 
       res.json({
@@ -698,11 +754,36 @@ class OrderController {
         for (const item of order.items) {
           const product = await Product.findById(item.product);
           if (product && product.trackInventory) {
-            product.inventory.quantity += item.quantity;
-            await Product.updateOne(
-              { _id: item.product },
-              { $inc: { 'inventory.quantity': item.quantity } }
-            );
+            // Check if item has a selected color
+            const selectedColorName = item.variant?.name === 'Color' ? item.variant.value : null;
+            
+            if (selectedColorName && product.colors && product.colors.length > 0) {
+              const colorIndex = product.colors.findIndex(c => c.name === selectedColorName);
+              if (colorIndex !== -1) {
+                // Update both color inventory and total inventory
+                await Product.updateOne(
+                  { _id: item.product },
+                  { 
+                    $inc: { 
+                      [`colors.${colorIndex}.inventory`]: item.quantity,
+                      'inventory.quantity': item.quantity
+                    }
+                  }
+                );
+              } else {
+                // Color not found, just update total inventory
+                await Product.updateOne(
+                  { _id: item.product },
+                  { $inc: { 'inventory.quantity': item.quantity } }
+                );
+              }
+            } else {
+              // No color variant, update total inventory only
+              await Product.updateOne(
+                { _id: item.product },
+                { $inc: { 'inventory.quantity': item.quantity } }
+              );
+            }
           }
           
           // Restore flash deal inventory if applicable

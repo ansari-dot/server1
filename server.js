@@ -24,6 +24,7 @@ import searchRoutes from './routes/search.js';
 import heroSectionRoutes from './routes/heroSection.js';
 import brandRoutes from './routes/brands.js';
 import newsletterRoutes from './routes/newsletter.js';
+import shopBannerRoutes from './routes/shopBanner.js';
 
 dotenv.config();
 connectDB();
@@ -108,6 +109,7 @@ app.use('/api/search', searchRoutes);
 app.use('/api/hero-section', heroSectionRoutes);
 app.use('/api/brands', brandRoutes);
 app.use('/api/newsletter', newsletterRoutes);
+app.use('/api/shop-banner', shopBannerRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

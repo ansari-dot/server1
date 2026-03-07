@@ -148,6 +148,15 @@ couponSchema.methods.canCustomerUse = async function(customerEmail) {
 couponSchema.methods.applyToCart = function(cart) {
   if (!this.isValid()) return { valid: false, message: 'Invalid coupon' };
   
+  // Check if cart contains flash deal items
+  const hasFlashDealItems = cart.items.some(item => item.flashDeal && item.flashDeal.active);
+  if (hasFlashDealItems) {
+    return {
+      valid: false,
+      message: 'Coupon cannot be applied to flash deal items. You are already getting a discount!'
+    };
+  }
+  
   let applicableSubtotal = cart.subtotal;
   
   // Check if coupon is product-specific

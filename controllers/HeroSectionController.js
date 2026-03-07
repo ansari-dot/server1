@@ -106,8 +106,8 @@ class HeroSectionController {
         });
       }
 
-      // Delete image file
-      if (heroSection.image) {
+      // Delete image file only if it's not an external URL
+      if (heroSection.image && !heroSection.image.startsWith('http')) {
         const filePath = path.join(process.cwd(), heroSection.image);
         if (fs.existsSync(filePath)) {
           fs.unlinkSync(filePath);

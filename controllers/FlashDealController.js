@@ -423,7 +423,7 @@ class FlashDealController {
         .sort({ createdAt: -1 })
         .limit(limit * 1)
         .skip((page - 1) * limit)
-        .select('name slug sku price mainCategory subCategory brand images status');
+        .select('name slug sku price mainCategory subCategory brand images status inventory');
 
       console.log('Found available products:', products.length);
 

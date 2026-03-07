@@ -153,9 +153,12 @@ class ProductController {
           )
         );
         removedImages.forEach(image => {
-          const filePath = path.join(process.cwd(), image.url);
-          if (fs.existsSync(filePath)) {
-            try { fs.unlinkSync(filePath); } catch (err) {}
+          // Only delete if it's not an external URL
+          if (!image.url.startsWith('http')) {
+            const filePath = path.join(process.cwd(), image.url);
+            if (fs.existsSync(filePath)) {
+              try { fs.unlinkSync(filePath); } catch (err) {}
+            }
           }
         });
       }
@@ -183,8 +186,11 @@ class ProductController {
       }
       req.oldData = product.toObject();
       product.images.forEach(image => {
-        const filePath = path.join(process.cwd(), image.url);
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        // Only delete if it's not an external URL
+        if (!image.url.startsWith('http')) {
+          const filePath = path.join(process.cwd(), image.url);
+          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        }
       });
       await Product.findByIdAndDelete(req.params.id);
       res.json({ success: true, message: 'Product deleted successfully' });
@@ -233,8 +239,11 @@ class ProductController {
         product.images[0].isPrimary = true;
       }
       await product.save();
-      const filePath = path.join(process.cwd(), deletedImage.url);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      // Only delete if it's not an external URL
+      if (!deletedImage.url.startsWith('http')) {
+        const filePath = path.join(process.cwd(), deletedImage.url);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }
       res.json({ success: true, message: 'Image deleted successfully' });
     } catch (error) {
       console.error('Delete image error:', error);
