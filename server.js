@@ -38,17 +38,14 @@ app.set('trust proxy', 1);
 
 // CORS configuration - MUST BE FIRST
 const allowedOrigins = [
-    'https://flourishing-vacherin-28b8c4.netlify.app/',
-    'https://transcendent-gaufre-9356a8.netlify.app/',
+    'https://sunny-queijadas-69a94f.netlify.app',
+    'https://peppy-hummingbird-2e2acb.netlify.app',
     'http://localhost:3000',
     'http://localhost:5173',
     'http://localhost:5174',
     'http://127.0.0.1:3000',
     'http://127.0.0.1:5173',
-    'http://127.0.0.1:5174',
-    'https://tmobiletech.netlify.app',
-    'https://admin-tmobiletech.netlify.app',
-    'https://admin-tmobiletech.netlify.app/login'
+    'http://127.0.0.1:5174'
 ];
 
 app.use(cors({
